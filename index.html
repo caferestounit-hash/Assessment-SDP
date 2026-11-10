@@ -2268,7 +2268,7 @@ window.SPELL_PACK={"id":"H4sIAAAAAAACA1S8efwUR3YnuO/FkZFRcWVlZNb5q2r1JXe7u+22fE1
         const trayOpen = { riwayat: false, rekap: false };
         const trayToggle = (k, el) => { trayOpen[k] = el.open; };
         const trayHead = (key, label, n, extra) => `<summary class="px-3 py-2 flex items-center gap-2 cursor-pointer select-none"><span class="w-6 h-6 shrink-0 rounded-md bg-amber-100 text-amber-700 flex items-center justify-center"><svg class="ic !w-3.5 !h-3.5"><use href="#i-clock"/></svg></span><span class="flex-1 text-xs font-bold text-slate-800">${label}</span><span class="px-1.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-black">${n}</span>${extra || ''}<svg class="ic !w-3.5 !h-3.5 text-slate-400 tray-chev"><use href="#i-chevron-down"/></svg></summary>`;
-        const trayTime = i => { const t = i.createdDate || Date.now(), d = new Date(t); return (d.toDateString() === new Date().toDateString() ? '' : d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) + ' · ') + logClock(t); };
+        const trayTime = i => { const t = riwTime(i) || Date.now(), d = new Date(t); return (d.toDateString() === new Date().toDateString() ? '' : d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) + ' · ') + logClock(t); };
 
         // Tray penguji: form terkirim yang menunggu persetujuan ETD (tanpa skor / nama penilai)
         function renderRiwayatTray() {
@@ -2320,7 +2320,7 @@ window.SPELL_PACK={"id":"H4sIAAAAAAACA1S8efwUR3YnuO/FkZFRcWVlZNb5q2r1JXe7u+22fE1
         // ================= RIWAYAT =================
         // Urutan Riwayat Terkirim: waktu / nama / bagian, naik atau turun
         const riwSort = { by: 'waktu', dir: 'desc' };
-        const riwTime = i => i.createdDate || impParseTime(i.timestamp) || 0;
+        const riwTime = i => impParseTime(i.timestamp) || i.createdDate || 0;
         function setRiwSort(by) { if (riwSort.by === by) return; riwSort.by = by; riwSort.dir = by === 'waktu' ? 'desc' : 'asc'; renderRiwayatCards(); }
         function toggleRiwDir() { riwSort.dir = riwSort.dir === 'asc' ? 'desc' : 'asc'; renderRiwayatCards(); }
         function sortRiw(list) {
@@ -2469,6 +2469,8 @@ window.SPELL_PACK={"id":"H4sIAAAAAAACA1S8efwUR3YnuO/FkZFRcWVlZNb5q2r1JXe7u+22fE1
             return rows;
         }
         function impParseTime(str) {
+            const iso = String(str || '').match(/(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T]+(\d{1,2})[.:](\d{2})(?:[.:](\d{2}))?)?/);
+            if (iso) { const t = new Date(+iso[1], +iso[2] - 1, +iso[3], +(iso[4] || 0), +(iso[5] || 0), +(iso[6] || 0)).getTime(); if (!isNaN(t)) return t; }
             const m = String(str || '').match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})(?:[ ,T]+(\d{1,2})[.:](\d{2})(?:[.:](\d{2}))?)?/);
             if (!m) return 0; const t = new Date(+m[3], +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0)).getTime();
             return isNaN(t) ? 0 : t;
@@ -2485,7 +2487,7 @@ window.SPELL_PACK={"id":"H4sIAAAAAAACA1S8efwUR3YnuO/FkZFRcWVlZNb5q2r1JXe7u+22fE1
             if (miss.length) return { err: 'Kolom wajib tidak ditemukan: ' + miss.map(k => ({ peserta: 'Peserta SDP', penguji: 'Penguji', bagian: 'Bagian' }[k])).join(', ') + '. Gunakan format dari tombol Export atau unduh template.' };
             const noK = kriteriaList.filter(k => kcol[k.id] === undefined);
             if (noK.length) return { err: 'Kolom nilai kriteria tidak lengkap (' + noK.map(k => 'K' + k.id).join(', ') + ').' };
-            const exist = new Set(assessmentList.concat(trashList).map(i => i.id));
+            const exist = new Set(assessmentList.concat(trashList).map(i => i.id)), existMap = new Map(assessmentList.concat(trashList).map(i => [i.id, i]));
             const fp = i => [i.namaPeserta, i.namaPenguji, i.sdpBagian, unitOfA(i), i.timestamp].join('|').toLowerCase();
             const seenFp = new Set(assessmentList.concat(trashList).map(fp)), seenId = new Set();
             const out = []; const now = Date.now();
@@ -2507,6 +2509,10 @@ window.SPELL_PACK={"id":"H4sIAAAAAAACA1S8efwUR3YnuO/FkZFRcWVlZNb5q2r1JXe7u+22fE1
                 let id = g('id'); if (!/^[\w-]{3,60}$/.test(id)) id = '';
                 const item = { id: id || 'sdp-' + (now + idx), namaPenguji: o.penguji, peranPenguji: g('peran') || '-', namaPeserta: o.nama, sdpBagian: bagian, sdpCabang: g('cabang'), sdpUnit: unit, batch: g('batch'), scoreTotal: Math.round(sum / kriteriaList.length * 100) / 100, scores, komentars, timestamp: ts, createdDate: impParseTime(ts) || now + idx, imported: true };
                 o.item = item;
+                if (id && existMap.has(id) && !seenId.has(id)) {
+                    const ex = existMap.get(id), nt = g('waktu') ? impParseTime(g('waktu')) : 0;
+                    if (nt && Math.abs(nt - riwTime(ex)) > 1000) { seenId.add(id); o.status = 'upd'; o.msg = 'Waktu diperbarui'; o.target = ex; o.newTs = g('waktu'); o.newT = nt; out.push(o); return; }
+                }
                 if ((id && (exist.has(id) || seenId.has(id))) || seenFp.has(fp(item))) { o.status = 'dup'; o.msg = 'Sudah ada'; out.push(o); return; }
                 seenId.add(item.id); seenFp.add(fp(item)); o.status = 'ok'; out.push(o);
             });
@@ -2533,13 +2539,13 @@ window.SPELL_PACK={"id":"H4sIAAAAAAACA1S8efwUR3YnuO/FkZFRcWVlZNb5q2r1JXe7u+22fE1
                     <p id="imp-err" class="hidden text-xs font-semibold text-rose-600"></p>`;
                 return;
             }
-            const ok = impRows.filter(r => r.status === 'ok'), dup = impRows.filter(r => r.status === 'dup'), er = impRows.filter(r => r.status === 'error');
+            const ok = impRows.filter(r => r.status === 'ok'), upd = impRows.filter(r => r.status === 'upd'), dup = impRows.filter(r => r.status === 'dup'), er = impRows.filter(r => r.status === 'error');
             const chip = (n, l, c) => `<div class="flex-1 rounded-lg px-2 py-1.5 text-center" style="background:${c[0]};color:${c[1]}"><div class="text-base font-black leading-none">${n}</div><div class="text-[10px] font-bold mt-0.5">${l}</div></div>`;
             b.innerHTML = `<div class="text-[11px] text-slate-500 truncate">${esc(impFile)}</div>
-                <div class="flex gap-1.5">${chip(ok.length, 'Akan diimpor', ['#dcfce7', '#166534'])}${chip(dup.length, 'Sudah ada', ['#f1f5f9', '#475569'])}${chip(er.length, 'Error', ['#ffe4e6', '#9f1239'])}</div>
+                <div class="flex gap-1.5">${chip(ok.length, 'Akan diimpor', ['#dcfce7', '#166534'])}${upd.length ? chip(upd.length, 'Waktu diperbarui', ['#e0f2fe', '#075985']) : ''}${chip(dup.length, 'Sudah ada', ['#f1f5f9', '#475569'])}${chip(er.length, 'Error', ['#ffe4e6', '#9f1239'])}</div>
                 ${er.length ? `<div class="rounded-lg bg-rose-50 px-2.5 py-2 text-[11px] text-rose-800 space-y-0.5 max-h-28 overflow-y-auto">${er.slice(0, 20).map(r => `<div>Baris ${r.line}: ${esc(r.msg)}</div>`).join('')}${er.length > 20 ? `<div>… dan ${er.length - 20} lainnya</div>` : ''}</div>` : ''}
                 ${ok.length ? `<div class="rounded-lg border border-slate-100 divide-y divide-slate-100 max-h-40 overflow-y-auto">${ok.slice(0, 8).map(r => `<div class="px-2.5 py-1.5 flex items-center gap-2 text-[11px]"><span class="flex-1 min-w-0 truncate"><b class="text-slate-800">${esc(r.nama)}</b> <span class="text-slate-400">· ${esc(bagianLabel(r.item.sdpBagian))} · ${esc(r.penguji)}</span></span><b class="text-amber-600 tabular-nums">${f2(r.item.scoreTotal)}</b></div>`).join('')}${ok.length > 8 ? `<div class="px-2.5 py-1.5 text-[10px] text-slate-400">+${ok.length - 8} data lainnya</div>` : ''}</div>` : ''}
-                <div class="flex gap-2 pt-1"><button type="button" onclick="impRows=[];renderImportStep()" class="h-10 px-4 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold">Ganti file</button><button type="button" id="imp-go" onclick="runImportRekap()" ${ok.length ? '' : 'disabled'} class="flex-1 h-10 rounded-xl bg-slate-900 text-white text-xs font-bold disabled:opacity-40">Impor ${ok.length} data</button></div>`;
+                <div class="flex gap-2 pt-1"><button type="button" onclick="impRows=[];renderImportStep()" class="h-10 px-4 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold">Ganti file</button><button type="button" id="imp-go" onclick="runImportRekap()" ${ok.length || upd.length ? '' : 'disabled'} class="flex-1 h-10 rounded-xl bg-slate-900 text-white text-xs font-bold disabled:opacity-40">${ok.length ? 'Impor ' + ok.length + ' data' : ''}${ok.length && upd.length ? ' · ' : ''}${upd.length ? 'Perbarui ' + upd.length + ' waktu' : ''}</button></div>`;
         }
         function onImportFile(inp) {
             const f = inp.files && inp.files[0]; if (!f) return;
@@ -2558,8 +2564,9 @@ window.SPELL_PACK={"id":"H4sIAAAAAAACA1S8efwUR3YnuO/FkZFRcWVlZNb5q2r1JXe7u+22fE1
             document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(() => URL.revokeObjectURL(url), 1000);
         }
         async function runImportRekap() {
-            const ok = impRows.filter(r => r.status === 'ok').map(r => r.item); if (!ok.length) return;
+            const ok = impRows.filter(r => r.status === 'ok').map(r => r.item), upd = impRows.filter(r => r.status === 'upd'); if (!ok.length && !upd.length) return;
             const btn = $('imp-go'); if (btn) { btn.disabled = true; btn.textContent = 'Mengimpor…'; }
+            upd.forEach(r => { r.target.timestamp = r.newTs; r.target.createdDate = r.newT; });
             ok.forEach(i => assessmentList.unshift(i));
             assessmentList.sort((a, b) => (b.createdDate || 0) - (a.createdDate || 0));
             saveAssessments(); renderAll();
@@ -2570,10 +2577,15 @@ window.SPELL_PACK={"id":"H4sIAAAAAAACA1S8efwUR3YnuO/FkZFRcWVlZNb5q2r1JXe7u+22fE1
                 fail += res.filter(x => x !== true).length;
                 if (btn) btn.textContent = `Mengimpor ${Math.min(i + 10, ok.length)}/${ok.length}…`;
             }
-            const skipped = impRows.length - ok.length, file = impFile;
-            logEvent('import', 'penilaian', `Impor ${ok.length} penilaian dari CSV`, { detail: `${file}${skipped ? ' · ' + skipped + ' baris dilewati' : ''}${sp.p ? ' · ' + sp.p + ' peserta baru' : ''}${sp.b ? ' · ' + sp.b + ' bagian baru' : ''}` });
+            for (let i = 0; i < upd.length; i += 10) {
+                const res = await Promise.all(upd.slice(i, i + 10).map(r => { const t = r.target; gasSync({ ...stripLocal(t), action: 'upsert' }); return cloudOK() ? withTimeout(cloudSet(COL.hasil, t._fsId || t.id, { timestamp: t.timestamp, createdDate: t.createdDate }, true), 8000) : Promise.resolve(true); }));
+                fail += res.filter(x => x !== true).length;
+            }
+            if (upd.length) { saveAssessments(); saveTrash(); renderAll(); }
+            const skipped = impRows.length - ok.length - upd.length, file = impFile;
+            logEvent('import', 'penilaian', ok.length ? `Impor ${ok.length} penilaian dari CSV${upd.length ? ', ' + upd.length + ' waktu diperbarui' : ''}` : `${upd.length} waktu submit diperbarui dari CSV`, { detail: `${file}${skipped ? ' · ' + skipped + ' baris dilewati' : ''}${sp.p ? ' · ' + sp.p + ' peserta baru' : ''}${sp.b ? ' · ' + sp.b + ' bagian baru' : ''}` });
             closeImportRekap();
-            toast((fail ? `${ok.length} data diimpor, ${fail} belum tersinkron ke cloud` : `${ok.length} data penilaian berhasil diimpor`) + (sp.p ? ` · ${sp.p} peserta baru masuk Kelola Data` : ''), fail ? 'warn' : 'success');
+            toast((fail ? `${[ok.length && ok.length + ' data diimpor', upd.length && upd.length + ' waktu diperbarui'].filter(Boolean).join(', ')}, ${fail} belum tersinkron ke cloud` : [ok.length && ok.length + ' data penilaian berhasil diimpor', upd.length && upd.length + ' waktu submit diperbarui'].filter(Boolean).join(' · ')) + (sp.p ? ` · ${sp.p} peserta baru masuk Kelola Data` : ''), fail ? 'warn' : 'success');
         }
 
         function exportRekapData() {
