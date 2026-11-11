@@ -2349,6 +2349,8 @@ window.SPELL_PACK={"id":"H4sIAAAAAAACA1S8efwUR3YnuO/FkZFRcWVlZNb5q2r1JXe7u+22fE1
             renderRiwayatTray();
             const c = $('riwayat-cards-container');
             const myAssess = sortRiw(visibleAssessments());
+            { const sig = riwSort.by + '|' + riwSort.dir + '|' + (etdUnit || ''); if (sig !== riwSig) { riwSig = sig; riwLimit = RIW_STEP; } }
+            const shownA = myAssess.slice(0, riwLimit), leftA = myAssess.length - shownA.length;
             renderRiwSortBar(myAssess.length);
             { const _b = $('badge-count-riwayat'); if (_b) _b.textContent = myAssess.length; }
             const isE = currentUserRole === 'ETD', GRID = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3';
@@ -2369,7 +2371,7 @@ window.SPELL_PACK={"id":"H4sIAAAAAAACA1S8efwUR3YnuO/FkZFRcWVlZNb5q2r1JXe7u+22fE1
             if (!isE) {
                 c.className = 'card overflow-hidden divide-y divide-slate-100';
                 c.style.borderRadius = '.85rem';
-                c.innerHTML = myAssess.map(item => {
+                c.innerHTML = shownA.map(item => {
                     const cab = String(item.sdpCabang || '').trim(), peran = peranLabel(item.peranPenguji) || '-';
                     return `<div class="px-3 py-2.5 flex items-start gap-2.5">
                         <span class="shrink-0 mt-0.5">${bagianLogo(findBagian(item.sdpBagian, unitOfA(item)), 28)}</span>
@@ -2380,11 +2382,11 @@ window.SPELL_PACK={"id":"H4sIAAAAAAACA1S8efwUR3YnuO/FkZFRcWVlZNb5q2r1JXe7u+22fE1
                         </div>
                         <span class="shrink-0 flex flex-col items-end leading-tight mt-0.5" title="Waktu submit · disetujui ETD">${ic('check-circle', '!w-4 !h-4 text-emerald-500 mb-0.5')}<span class="text-[10px] font-semibold text-slate-500 tabular-nums">${esc(riwDT(item)[0])}</span><span class="text-[10px] text-slate-400 tabular-nums">${esc(riwDT(item)[1])}</span></span>
                     </div>`;
-                }).join('');
+                }).join('') + (leftA > 0 ? `<div class="p-2">${moreBtn('moreRiw', leftA, RIW_STEP)}</div>` : '');
                 return;
             }
             c.style.borderRadius = '';
-            c.innerHTML = myAssess.map(item => `
+            c.innerHTML = shownA.map(item => `
                 <button onclick="openModal('${item.id}')" class="card p-4 text-left border-l-4 border-l-amber-500 active:bg-amber-50 space-y-2">
                     <div class="flex justify-between items-start gap-3">
                         <div class="min-w-0">
@@ -2402,18 +2404,27 @@ window.SPELL_PACK={"id":"H4sIAAAAAAACA1S8efwUR3YnuO/FkZFRcWVlZNb5q2r1JXe7u+22fE1
                         <div class="flex items-center gap-1.5 text-[11px] text-slate-400">${ic('clock', '!w-3.5 !h-3.5')}${esc(item.timestamp)}</div>
                     </div>
                 </button>
-            `).join('');
+            `).join('') + (leftA > 0 ? `<div class="col-span-full">${moreBtn('moreRiw', leftA, RIW_STEP)}</div>` : '');
         }
 
         // ================= REKAP (ETD) =================
+        // "Tampilkan lebih banyak": daftar panjang dirender bertahap agar tetap ringan
+        const REKAP_STEP = 40, RIW_STEP = 30;
+        let rekapLimit = REKAP_STEP, rekapSig = '', riwLimit = RIW_STEP, riwSig = '';
+        const moreRekap = () => { rekapLimit += REKAP_STEP; renderRekapTable(); };
+        const moreRiw = () => { riwLimit += RIW_STEP; renderRiwayatCards(); };
+        const moreBtn = (fn, left, step, cls) => `<button type="button" onclick="${fn}()" class="${cls || 'w-full'} h-9 rounded-xl bg-white border border-slate-200 active:bg-slate-100 text-[11px] font-bold text-slate-600 inline-flex items-center justify-center gap-1.5">${ic('chevron-down', '!w-3.5 !h-3.5')}Tampilkan lebih banyak <span class="text-slate-400 font-semibold">(${Math.min(step, left)} dari ${left} tersisa)</span></button>`;
+
         function renderRekapTable() {
             renderRekapTray();
             const kw = $('rekap-search').value.toLowerCase().trim();
             const rows = visibleAssessments().filter(i =>
                 i.namaPeserta.toLowerCase().includes(kw) || i.namaPenguji.toLowerCase().includes(kw) || i.sdpBagian.toLowerCase().includes(kw));
+            { const sig = kw + '|' + (etdUnit || ''); if (sig !== rekapSig) { rekapSig = sig; rekapLimit = REKAP_STEP; } }
+            const shown = rows.slice(0, rekapLimit), left = rows.length - shown.length;
 
             const empty = '<div class="p-8 text-center text-slate-400 text-sm">Tidak ada data penilaian.</div>';
-            $('rekap-cards').innerHTML = rows.length ? rows.map(item => `
+            $('rekap-cards').innerHTML = rows.length ? shown.map(item => `
                 <div class="card p-3 space-y-2">
                     <div class="flex justify-between items-start gap-3">
                         <div class="min-w-0">
@@ -2431,9 +2442,9 @@ window.SPELL_PACK={"id":"H4sIAAAAAAACA1S8efwUR3YnuO/FkZFRcWVlZNb5q2r1JXe7u+22fE1
                         </div>
                     </div>
                 </div>
-            `).join('') : empty;
+            `).join('') + (left > 0 ? moreBtn('moreRekap', left, REKAP_STEP) : '') : empty;
 
-            $('rekap-table-body').innerHTML = rows.length ? rows.map(item => `
+            $('rekap-table-body').innerHTML = rows.length ? shown.map(item => `
                 <tr class="hover:bg-amber-50/50">
                     <td class="p-3 text-slate-500 whitespace-nowrap">${esc(item.timestamp)}</td>
                     <td class="p-3 font-black text-slate-900">${esc(item.namaPeserta)}</td>
@@ -2446,7 +2457,7 @@ window.SPELL_PACK={"id":"H4sIAAAAAAACA1S8efwUR3YnuO/FkZFRcWVlZNb5q2r1JXe7u+22fE1
                         <button onclick="moveToTrash('${item.id}')" class="p-2 bg-red-100 hover:bg-red-200 rounded-lg text-red-600" title="Hapus">${ic('trash', '!w-4 !h-4')}</button>
                     </td>
                 </tr>
-            `).join('') : `<tr><td colspan="7" class="p-8 text-center text-slate-400">Tidak ada data penilaian.</td></tr>`;
+            `).join('') + (left > 0 ? `<tr><td colspan="7" class="p-3">${moreBtn('moreRekap', left, REKAP_STEP)}</td></tr>` : '') : `<tr><td colspan="7" class="p-8 text-center text-slate-400">Tidak ada data penilaian.</td></tr>`;
         }
 
         function csvCell(v) {
